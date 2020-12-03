@@ -1,0 +1,178 @@
+clear all
+clc
+
+%% Load Data
+% train data (44640 points)
+train_data =csvread('chiller_train.csv');
+train_input=train_data(:,1:3);
+training_target=train_data(:,4);
+
+% test data_ normal
+test_data_n =csvread('chiller_test_n.csv');
+test_input_n=test_data_n(:,1:3);
+test_target_n=test_data_n(:,4);
+
+% test data_ cases1: bias light error
+test_data_c1 =csvread('chiller_test_c1.csv');
+test_input_c1=test_data_c1(:,1:3);
+test_target_c1=test_data_c1(:,4);
+
+% test data_ cases2: severe light error
+test_data_c2 =csvread('chiller_test_c2.csv');
+test_input_c2=test_data_c2(:,1:3);
+test_target_c2=test_data_c2(:,4);
+
+% test data_ cases3: drift light error
+test_data_c3 =csvread('chiller_test_c3.csv');
+test_input_c3=test_data_c3(:,1:3);
+test_target_c3=test_data_c3(:,4);
+
+% test data_ cases4: drift severe error
+test_data_c4 =csvread('chiller_test_c4.csv');
+test_input_c4=test_data_c4(:,1:3);
+test_target_c4=test_data_c4(:,4);
+
+%% Normalizing input data
+train_input = train_input';
+test_input_n = test_input_n';
+test_input_c1 = test_input_c1';
+test_input_c2 = test_input_c2';
+test_input_c3 = test_input_c3';
+test_input_c4 = test_input_c4';
+
+% normalize
+
+for i = 1:3;
+   test_norm_n(i,:)  = ((test_input_n(i,:)- (min(train_input(i,:))-(max(train_input(i,:))-min(train_input(i,:))))))./((max(train_input(i,:))+(max(train_input(i,:))-min(train_input(i,:))))-(min(train_input(i,:))-(max(train_input(i,:))-min(train_input(i,:)))));
+   test_norm_c1(i,:) = ((test_input_c1(i,:)-(min(train_input(i,:))-(max(train_input(i,:))-min(train_input(i,:))))))./((max(train_input(i,:))+(max(train_input(i,:))-min(train_input(i,:))))-(min(train_input(i,:))-(max(train_input(i,:))-min(train_input(i,:)))));
+   test_norm_c2(i,:) = ((test_input_c2(i,:)-(min(train_input(i,:))-(max(train_input(i,:))-min(train_input(i,:))))))./((max(train_input(i,:))+(max(train_input(i,:))-min(train_input(i,:))))-(min(train_input(i,:))-(max(train_input(i,:))-min(train_input(i,:)))));
+   test_norm_c3(i,:) = ((test_input_c3(i,:)-(min(train_input(i,:))-(max(train_input(i,:))-min(train_input(i,:))))))./((max(train_input(i,:))+(max(train_input(i,:))-min(train_input(i,:))))-(min(train_input(i,:))-(max(train_input(i,:))-min(train_input(i,:)))));
+   test_norm_c4(i,:) = ((test_input_c4(i,:)-(min(train_input(i,:))-(max(train_input(i,:))-min(train_input(i,:))))))./((max(train_input(i,:))+(max(train_input(i,:))-min(train_input(i,:))))-(min(train_input(i,:))-(max(train_input(i,:))-min(train_input(i,:)))));
+end
+
+
+%% Test Neural Network - normal state
+% load pre-trainined neural net
+load('ML model.mat');
+test_output_n = net1(test_norm_n);
+test_norm_n = test_norm_n';
+test_output_n = test_output_n';
+% validation from normal state
+figure(1)
+result_n(:,1) = test_target_n;
+result_n(:,2) = test_output_n;
+plot(result_n)
+% title('Drift severe error result')
+xlabel('Time [minute]')
+ylabel('Chiler electric energy [J]')
+legend('Actual value','VS value') 
+
+RMSE = sqrt(immse(test_output_n,test_target_n));
+
+%% Predict on Fault Cases
+test_output_c1 = net1(test_norm_c1);
+test_norm_c1 = test_norm_c1';
+test_output_c1 = test_output_c1';
+
+test_output_c2 = net1(test_norm_c2);
+test_norm_c2 = test_norm_c2';
+test_output_c2 = test_output_c2';
+
+test_output_c3 = net1(test_norm_c3);
+test_norm_c3 = test_norm_c3';
+test_output_c3 = test_output_c3';
+
+test_output_c4 = net1(test_norm_c4);
+test_norm_c4 = test_norm_c4';
+test_output_c4 = test_output_c4';
+
+%% Results
+result_n(:,1) = test_target_n;
+result_n(:,2) = test_output_n;
+
+result_c1(:,1) = test_target_c1;
+result_c1(:,2) = test_output_c1;
+
+result_c2(:,1) = test_target_c2;
+result_c2(:,2) = test_output_c2;
+
+result_c3(:,1) = test_target_c3;
+result_c3(:,2) = test_output_c3;
+
+result_c4(:,1) = test_target_c4;
+result_c4(:,2) = test_output_c4;
+
+%% temporary plots for check
+%figure(2)
+%plot(result);
+% title('Drift severe error result')
+xlabel('Time [minute]')
+ylabel('Chiler electric energy [J]')
+legend('Actual value','VS value') 
+
+%% detect criteria 
+% criteria is 0.75 MJ on 10min average residuals
+result_n(:,3) = abs(result_n(:,1)-result_n(:,2))/(10^6);
+result_c1(:,3) = abs(result_c1(:,1)-result_c1(:,2))/(10^6);
+result_c2(:,3) = abs(result_c2(:,1)-result_c2(:,2))/(10^6);
+result_c3(:,3) = abs(result_c3(:,1)-result_c3(:,2))/(10^6);
+result_c4(:,3) = abs(result_c4(:,1)-result_c4(:,2))/(10^6);
+
+result_n(:,4) = result_n(:,3)>=0.75;
+result_c1(:,4) = result_c1(:,3)>=0.75;
+result_c2(:,4) = result_c2(:,3)>=0.75;
+result_c3(:,4) = result_c3(:,3)>=0.75;
+result_c4(:,4) = result_c4(:,3)>=0.75;
+
+%% detect-period filter (for drift error)
+% fault occurs 10:00 to 18:00
+len=1079
+
+ontime_c1=0;
+stamp=0;
+while ontime_c1<1
+    stamp = stamp+1;
+    if sum(result_c1(stamp:stamp+9,4))==10;
+        ontime_c1=stamp
+    end
+end
+
+ontime_c2=0;
+stamp=0;
+while ontime_c2<1
+    stamp = stamp+1;
+    if sum(result_c2(stamp:stamp+9,4))==10;
+        ontime_c2=stamp
+    end
+end
+
+ontime_c3=0;
+stamp=0;
+while ontime_c3<1
+    stamp = stamp+1;
+    if sum(result_c3(stamp:stamp+9,4))==10;
+        ontime_c3=stamp
+    end
+end
+
+ontime_c4=0;
+stamp=0;
+while ontime_c4<1
+    stamp = stamp+1;
+    if sum(result_c4(stamp:stamp+9,4))==10;
+        ontime_c4=stamp
+    end
+end
+
+
+detect_n= sum(result_n(600:1079,4)==1);
+detect_c1= sum(result_c1(ontime_c1:len,4)==1);
+detect_c2= sum(result_c2(ontime_c2:len,4)==1);
+detect_c3= sum(result_c3(ontime_c3:len,4)==1);
+detect_c4= sum(result_c4(ontime_c4:len,4)==1);
+
+detect_n/(1080-600)*100
+detect_c1/(1080-ontime_c1)*100
+detect_c2/(1080-ontime_c2)*100
+detect_c3/(1080-ontime_c3)*100
+detect_c4/(1080-ontime_c4)*100
