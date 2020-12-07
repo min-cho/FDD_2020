@@ -1,0 +1,131 @@
+"""
+Created on Tue Dec  1 12:45:17 2020
+@author: MR004CHM
+"""
+import os
+import tensorflow as tf
+import numpy as np
+import sklearn
+import pydot
+import matplotlib.pyplot as plt
+from tensorflow import keras
+from tensorflow.keras import layers
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import mean_squared_error
+os.chdir('C:\\Users\\MR004CHM\\Desktop\\TFcode')
+
+
+#### DEFINE FUNCTIONS ####
+
+def train_pre(train_data):
+    global trainX, trainY, testX, testY, scalerX
+    data_normal = np.loadtxt(train_data, delimiter=',', skiprows=1) 
+    X_normal = data_normal[:,0:3]
+    Y_normal = data_normal[:,3]/1000000
+    trainX, testX, trainY, testY = train_test_split(X_normal, Y_normal, test_size=0.3, shuffle=False)
+    scalerX = MinMaxScaler()
+    scalerX.fit(trainX)
+    #print(scalerX.data_max_)
+    trainX=scalerX.transform(trainX)
+    testX=scalerX.transform(testX)
+    
+    
+    
+def train_NN(trainX,trainY,n_epoch):
+    model = keras.Sequential()
+    model.add(layers.Dense(10, input_dim=3, activation="sigmoid", name="layer1"))
+    model.add(layers.Dense(10, activation="sigmoid", name="layer2"))
+    model.add(layers.Dense(1))
+    model.compile(loss='MSE', optimizer='adam')
+    model.summary()
+    #keras.utils.plot_model(model, "my_first_model.png")
+    hist=model.fit(trainX, trainY, epochs=n_epoch)
+    
+    # plot the training process
+    plt.plot(np.sqrt(hist.history['loss']))
+    plt.ylim(0.0, 0.5)
+    plt.ylabel('loss(RMSE)')
+    plt.xlabel('epoch')
+    plt.legend(['train'], loc='upper left')
+    plt.show()
+    
+    return(model)
+    
+def eval_model(NN_MODEL,trainX,trainY,testX,testY):
+    model=NN_MODEL
+    trainScore = model.evaluate(trainX, trainY, verbose=0) 
+    model.reset_states()
+    print('Train Score: ', np.sqrt(trainScore))
+    testPredict = model.predict(testX)
+    testScore = model.evaluate(testX, testY, verbose=0)
+    model.reset_states()
+    print('Test Score: ', np.sqrt(testScore))
+
+
+
+
+def fault_detection(NN_MODEL,case_name, start, end):
+    model=NN_MODEL
+
+    data_n = np.loadtxt(case_name, delimiter=',', skiprows=1) 
+    predictX = data_n[:,0:3]
+    predictY = data_n[:,3]/1000000
+    predictX=scalerX.transform(predictX)
+    
+    testPredict = model.predict(predictX)
+    result_true     =predictY
+    result_predict  =testPredict
+    print('RMSE=',np.sqrt(mean_squared_error(result_true,result_predict)),"(MJ)")
+    
+    plt.plot(result_true)
+    plt.plot(result_predict)
+    plt.ylabel('Energy(MJ)')
+    plt.xlabel('min')
+    plt.legend(['Measured','Expected'], loc='upper left')
+    plt.title(case_name)
+    plt.show()
+    
+    result_true = result_true.reshape(-1,1)
+    global gap_n
+    gap_n= np.hstack([abs(result_true-result_predict), abs(result_true-result_predict)>=0.75])
+    ontime=0
+    stamp=0
+    while ontime<1:
+        stamp = stamp+1
+        if stamp==len(gap_n):
+            print("no fault detected")
+            break
+        if sum(gap_n[stamp:stamp+10,1])==10:
+            ontime=stamp
+
+    true_positive = sum(gap_n[start-1:end,1])
+    false_negative = end-start-true_positive
+    false_positive = sum(gap_n[0:start-1,1]) + sum(gap_n[end:(len(gap_n)),1])
+    true_negative = len(gap_n)-(end-start)-false_positive
+    print("detected from ",ontime,'(min)')
+    print ('true positive', true_positive)
+    print ('true negative', true_negative)
+    print ('false negative', false_negative)
+    print ('false positive',false_positive)
+    print ('Accuracy = ' , (true_positive + true_negative)/len(gap_n) )
+    if (true_positive+false_negative)==0:
+        print ('NORMAL CASE - Prceision & Recall are not calculated')
+    else:
+        print ('Precision = ', true_positive/(true_positive+false_positive))
+        print ('Recall = ', true_positive/(true_positive+false_negative))
+            
+            
+
+train_pre('chiller_train.csv')
+
+nn_model = train_NN(trainX,trainY,100)
+
+eval_model(nn_model,trainX,trainY,testX,testY)
+
+fault_detection(nn_model, 'chiller_test_n.csv', 0, 0)
+fault_detection(nn_model, 'chiller_test_c1.csv', 600, 1080)
+fault_detection(nn_model, 'chiller_test_c2.csv', 600, 1080)
+fault_detection(nn_model, 'chiller_test_c3.csv', 600, 1080)
+fault_detection(nn_model, 'chiller_test_c4.csv', 600, 1080)
+
