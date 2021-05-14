@@ -136,8 +136,8 @@ def FDD_analysis(NN_MODEL, case_name):
         print("Energy was overused by ", impact, "(MJ) than expected")
 
     plt.figure(dpi=500) 
-    plt.plot(result_predict, color='black')
     plt.plot(result_measured, color='blue')
+    plt.plot(result_predict, color='black')
     plt.annotate("Fault detected at {} (min)".format(ontime), xy=(ontime, result_measured[ontime,]), xytext=(ontime+10, max(result_predict)), 
                  fontsize=7,arrowprops=dict(color='red',width=1))
     plt.ylabel('Energy(MJ)')
