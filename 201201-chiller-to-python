@@ -1,0 +1,172 @@
+"""
+Created on Tue Dec  1 12:45:17 2020
+@author: MR004CHM
+"""
+import os
+import tensorflow as tf
+import numpy as np
+import sklearn
+import pydot
+import matplotlib.pyplot as plt
+from tensorflow import keras
+from tensorflow.keras import layers
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import mean_squared_error
+os.chdir('C:\\Users\\MR004CHM\\Desktop\\TFcode')
+
+#%% DEFINE FUNCTIONS ####
+
+def train_pre(train_data):
+    global trainX, trainY, testX, testY, scalerX
+    data_normal = np.loadtxt(train_data, delimiter=',', skiprows=1) 
+    X_normal = data_normal[:,0:3]
+    Y_normal = data_normal[:,3]/1000000
+    trainX, testX, trainY, testY = train_test_split(X_normal, Y_normal, test_size=0.2, shuffle=True)
+    scalerX = MinMaxScaler()
+    scalerX.fit(trainX)
+    #print(scalerX.data_max_)
+    trainX=scalerX.transform(trainX)
+    testX=scalerX.transform(testX)
+    
+    
+def train_NN(trainX,trainY,n_epoch):
+    model = keras.Sequential()
+    model.add(layers.Dense(10, input_dim=3, activation="sigmoid", name="layer1"))
+    model.add(layers.Dense(10, activation="sigmoid", name="layer2"))
+    model.add(layers.Dense(1))
+    model.compile(loss='MSE', optimizer='adam')
+    model.summary()
+    #keras.utils.plot_model(model, "my_first_model.png")
+    hist=model.fit(trainX, trainY, epochs=n_epoch)
+    
+    # plot the training process
+    plt.plot(np.sqrt(hist.history['loss']))
+    plt.ylim(0.0, 0.5)
+    plt.ylabel('loss(RMSE)')
+    plt.xlabel('epoch')
+    plt.legend(['train'], loc='upper left')
+    plt.show()
+    return(model)
+    
+def eval_model(NN_MODEL,trainX,trainY,testX,testY):
+    model=NN_MODEL
+    trainScore = model.evaluate(trainX, trainY, verbose=0) 
+    model.reset_states()
+    print('Train Score: ', np.sqrt(trainScore))
+    testScore = model.evaluate(testX, testY, verbose=0)
+    model.reset_states()
+    print('Test Score: ', np.sqrt(testScore))
+
+
+def FDD_DEV(NN_MODEL,case_name, start, end):
+    global gap_n
+    model=NN_MODEL
+    data_n = np.loadtxt(case_name, delimiter=',', skiprows=1) 
+    predictX = data_n[:,0:3]
+    predictY = data_n[:,3]/1000000
+    predictX=scalerX.transform(predictX)
+    result_predict   =model.predict(predictX)
+    result_measured  =predictY
+    print('RMSE=',np.sqrt(mean_squared_error(result_measured,result_predict)),"(MJ)")
+    
+    result_measured = result_measured.reshape(-1,1)
+    gap_n= np.hstack([abs(result_measured-result_predict), abs(result_measured-result_predict)>=0.75])
+    ontime=0
+    stamp=0
+    while ontime<1:
+        stamp = stamp+1
+        if stamp==len(gap_n):
+            print("no fault detected")
+            break
+        if sum(gap_n[stamp:stamp+10,1])==10:
+            ontime=stamp
+
+    print ('########## FOR DEVELOPEMENT ###########')
+    true_positive = sum(gap_n[start-1:end,1])
+    false_negative = end-start-true_positive
+    false_positive = sum(gap_n[0:start-1,1]) + sum(gap_n[end:(len(gap_n)),1])
+    true_negative = len(gap_n)-(end-start)-false_positive
+    print("detected from ",ontime,'(time(min)')
+    print ('true positive', true_positive)
+    print ('true negative', true_negative)
+    print ('false negative', false_negative)
+    print ('false positive',false_positive)
+    print ('Accuracy = ' , (true_positive + true_negative)/len(gap_n) )
+    if (true_positive+false_negative)==0:
+        print ('NORMAL STATE - Prceision & Recall are not calculated')
+    else:
+        print ('Precision = ', true_positive/(true_positive+false_positive))
+        print ('Recall = ', true_positive/(true_positive+false_negative))
+    print ('#######################################')
+        
+    plt.plot(result_measured)
+    plt.plot(result_predict)
+    plt.ylabel('Energy(MJ)')
+    plt.xlabel('min')
+    plt.legend(['Measured','Expected'], loc='upper left')
+    plt.title(case_name[:-4])
+    plt.show()
+            
+    
+def FDD_analysis(NN_MODEL, case_name):
+    model=NN_MODEL
+    data_n = np.loadtxt(case_name, delimiter=',', skiprows=1) 
+    predictX = data_n[:,0:3]
+    predictY = data_n[:,3]/1000000
+    predictX=scalerX.transform(predictX)
+    result_predict  = model.predict(predictX)
+    result_measured = predictY.reshape(-1,1)
+    
+    gap_n= np.hstack([abs(result_measured-result_predict), abs(result_measured-result_predict)>=0.75])
+    ontime=0
+    stamp=0
+    while ontime<1:
+        stamp = stamp+1
+        if stamp==len(gap_n):
+            break
+        if sum(gap_n[stamp:stamp+10,1])==10:
+            ontime=stamp 
+    
+    impact = sum(gap_n[ontime:,0])
+    if ontime==0:
+        print("No fault detected")
+    else:
+        print("Fault is detected at ",ontime,'(min)')    
+        print("Energy was overused by ", impact, "(MJ) than expected")
+
+    plt.figure(dpi=500) 
+    plt.plot(result_predict, color='black')
+    plt.plot(result_measured, color='blue')
+    plt.annotate("Fault detected at {} (min)".format(ontime), xy=(ontime, result_measured[ontime,]), xytext=(ontime+10, max(result_predict)), 
+                 fontsize=7,arrowprops=dict(color='red',width=1))
+    plt.ylabel('Energy(MJ)')
+    plt.xlabel('min')
+    plt.legend(['Measured','Expected'], loc='upper left')
+    plt.title(case_name[:-4])
+    plt.show()
+                  
+
+
+######################################################################################################################
+#%% execution 
+
+train_pre('chiller_train.csv')
+nn_model = train_NN(trainX,trainY,150)
+#nn_model.save('model_chiller.h5')
+#nn_model = keras.models.load_model('model_chiller.h5')
+
+eval_model(nn_model,trainX,trainY,testX,testY)
+
+FDD_DEV(nn_model, 'chiller_test_n.csv', 0, 0)
+FDD_DEV(nn_model, 'chiller_test_c1.csv', 600, 1080)
+FDD_DEV(nn_model, 'chiller_test_c2.csv', 600, 1080)
+FDD_DEV(nn_model, 'chiller_test_c3.csv', 600, 1080)
+FDD_DEV(nn_model, 'chiller_test_c4.csv', 600, 1080)
+
+FDD_analysis(nn_model, 'chiller_test_n.csv')
+FDD_analysis(nn_model, 'chiller_test_c1.csv')
+FDD_analysis(nn_model, 'chiller_test_c2.csv')
+FDD_analysis(nn_model, 'chiller_test_c3.csv')
+FDD_analysis(nn_model, 'chiller_test_c4.csv')
+
